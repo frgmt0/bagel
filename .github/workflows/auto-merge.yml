@@ -1,0 +1,54 @@
+name: Auto-merge Dev to Main
+
+on:
+  push:
+    branches: [ dev ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+
+jobs:
+  auto-merge:
+    if: contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+    
+    - name: Check if main exists and create if needed
+      run: |
+        if ! git show-ref --verify --quiet refs/heads/main; then
+          echo "Main branch doesn't exist, creating it"
+          git checkout -b main
+          git push origin main
+        fi
+    
+    - name: Merge dev to main
+      run: |
+        git checkout main
+        git pull origin main
+        git merge dev --no-ff -m "Auto-merge dev to main [skip ci]"
+        git push origin main
+    
+    - name: Create tag if version changed
+      run: |
+        # Extract version from Cargo.toml
+        VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        
+        # Check if tag already exists
+        if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+          echo "Creating tag v$VERSION"
+          git tag -a "v$VERSION" -m "Release version $VERSION"
+          git push origin "v$VERSION"
+        else
+          echo "Tag v$VERSION already exists"
+        fi

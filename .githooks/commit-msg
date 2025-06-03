@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+# Commit message hook for Bagel Browser
+# Validates conventional commit message format
+#
+
+commit_file=$1
+commit_msg=$(cat "$commit_file")
+
+# Conventional commit pattern
+# type(scope): description
+# 
+# Types: feat, fix, docs, style, refactor, perf, test, chore
+# Scope is optional
+# Description should be present and meaningful
+commit_pattern="^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?: .{1,72}$"
+
+# Allow merge commits and revert commits
+if echo "$commit_msg" | grep -qE "^(Merge|Revert)"; then
+    exit 0
+fi
+
+# Check if commit message follows conventional format
+if ! echo "$commit_msg" | head -1 | grep -qE "$commit_pattern"; then
+    echo "❌ Invalid commit message format!"
+    echo ""
+    echo "Commit messages must follow the Conventional Commits specification:"
+    echo "  type(scope): description"
+    echo ""
+    echo "Types:"
+    echo "  feat:     New feature"
+    echo "  fix:      Bug fix"
+    echo "  docs:     Documentation changes"
+    echo "  style:    Code style changes (formatting, etc.)"
+    echo "  refactor: Code refactoring"
+    echo "  perf:     Performance improvements"
+    echo "  test:     Test changes"
+    echo "  chore:    Build, dependencies, or other maintenance"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add dark mode toggle"
+    echo "  feat(ui): add navigation sidebar"
+    echo "  fix: resolve memory leak in renderer"
+    echo "  docs: update installation instructions"
+    echo ""
+    echo "Your commit message:"
+    echo "  $commit_msg"
+    echo ""
+    exit 1
+fi
+
+# Check for imperative mood in description
+description=$(echo "$commit_msg" | head -1 | sed -E 's/^[^:]+: //')
+if echo "$description" | grep -qE "^(added|fixed|updated|changed|removed)"; then
+    echo "⚠️  Warning: Use imperative mood in commit messages"
+    echo "   Instead of 'added feature', use 'add feature'"
+    echo "   Instead of 'fixed bug', use 'fix bug'"
+fi
+
+# Check for line length
+first_line=$(echo "$commit_msg" | head -1)
+if [ ${#first_line} -gt 72 ]; then
+    echo "❌ Commit message first line is too long (${#first_line} > 72 characters)"
+    echo "   Keep the first line under 72 characters"
+    exit 1
+fi
+
+echo "✅ Commit message format is valid"
+exit 0

@@ -1,0 +1,147 @@
+name: Generate Changelog
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        CURRENT_TAG=${GITHUB_REF#refs/tags/}
+        
+        echo "# Changelog for $CURRENT_TAG" > CHANGELOG_TEMP.md
+        echo "" >> CHANGELOG_TEMP.md
+        echo "**Release Date:** $(date -u +"%Y-%m-%d")" >> CHANGELOG_TEMP.md
+        echo "" >> CHANGELOG_TEMP.md
+        
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "## Changes since $PREVIOUS_TAG" >> CHANGELOG_TEMP.md
+          echo "" >> CHANGELOG_TEMP.md
+          
+          # Features
+          FEATURES=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "^feat(\(.+\))?:" || true)
+          if [ -n "$FEATURES" ]; then
+            echo "### ✨ Features" >> CHANGELOG_TEMP.md
+            echo "$FEATURES" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+          # Bug fixes
+          FIXES=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "^fix(\(.+\))?:" || true)
+          if [ -n "$FIXES" ]; then
+            echo "### 🐛 Bug Fixes" >> CHANGELOG_TEMP.md
+            echo "$FIXES" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+          # Documentation
+          DOCS=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "^docs(\(.+\))?:" || true)
+          if [ -n "$DOCS" ]; then
+            echo "### 📚 Documentation" >> CHANGELOG_TEMP.md
+            echo "$DOCS" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+          # Performance
+          PERF=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "^perf(\(.+\))?:" || true)
+          if [ -n "$PERF" ]; then
+            echo "### ⚡ Performance" >> CHANGELOG_TEMP.md
+            echo "$PERF" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+          # Refactoring
+          REFACTOR=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "^refactor(\(.+\))?:" || true)
+          if [ -n "$REFACTOR" ]; then
+            echo "### ♻️ Refactoring" >> CHANGELOG_TEMP.md
+            echo "$REFACTOR" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+          # Chores
+          CHORES=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "^chore(\(.+\))?:" || true)
+          if [ -n "$CHORES" ]; then
+            echo "### 🔧 Maintenance" >> CHANGELOG_TEMP.md
+            echo "$CHORES" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+          # Breaking changes
+          BREAKING=$(git log --pretty=format:"%s (%h)" $PREVIOUS_TAG..HEAD | grep -E "(BREAKING CHANGE|!):" || true)
+          if [ -n "$BREAKING" ]; then
+            echo "### 💥 BREAKING CHANGES" >> CHANGELOG_TEMP.md
+            echo "$BREAKING" | sed 's/^/- /' >> CHANGELOG_TEMP.md
+            echo "" >> CHANGELOG_TEMP.md
+          fi
+          
+        else
+          echo "## Initial Release" >> CHANGELOG_TEMP.md
+          echo "" >> CHANGELOG_TEMP.md
+          echo "This is the first release of Bagel Browser." >> CHANGELOG_TEMP.md
+          echo "" >> CHANGELOG_TEMP.md
+        fi
+        
+        # Contributors
+        echo "## Contributors" >> CHANGELOG_TEMP.md
+        if [ -n "$PREVIOUS_TAG" ]; then
+          git log --pretty=format:"%an" $PREVIOUS_TAG..HEAD | sort -u | sed 's/^/- @/' >> CHANGELOG_TEMP.md
+        else
+          git log --pretty=format:"%an" | sort -u | sed 's/^/- @/' >> CHANGELOG_TEMP.md
+        fi
+        echo "" >> CHANGELOG_TEMP.md
+        
+        # Installation instructions
+        echo "## Installation" >> CHANGELOG_TEMP.md
+        echo "" >> CHANGELOG_TEMP.md
+        echo "Download the appropriate binary for your platform:" >> CHANGELOG_TEMP.md
+        echo "- **Linux x64**: \`bagel-linux-x64\`" >> CHANGELOG_TEMP.md
+        echo "- **Windows x64**: \`bagel-windows-x64.exe\`" >> CHANGELOG_TEMP.md
+        echo "- **macOS x64**: \`bagel-macos-x64\`" >> CHANGELOG_TEMP.md
+        echo "- **macOS ARM64**: \`bagel-macos-arm64\`" >> CHANGELOG_TEMP.md
+        echo "" >> CHANGELOG_TEMP.md
+        echo "### Verification" >> CHANGELOG_TEMP.md
+        echo "Verify your download with the provided SHA256 checksums:" >> CHANGELOG_TEMP.md
+        echo "\`\`\`bash" >> CHANGELOG_TEMP.md
+        echo "# Linux/macOS" >> CHANGELOG_TEMP.md
+        echo "shasum -a 256 -c bagel-*.sha256" >> CHANGELOG_TEMP.md
+        echo "" >> CHANGELOG_TEMP.md
+        echo "# Windows" >> CHANGELOG_TEMP.md
+        echo "certutil -hashfile bagel-windows-x64.exe SHA256" >> CHANGELOG_TEMP.md
+        echo "\`\`\`" >> CHANGELOG_TEMP.md
+    
+    - name: Update or Create CHANGELOG.md
+      run: |
+        if [ -f CHANGELOG.md ]; then
+          # Prepend new changelog to existing file
+          cp CHANGELOG.md CHANGELOG_OLD.md
+          cat CHANGELOG_TEMP.md > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "---" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          cat CHANGELOG_OLD.md >> CHANGELOG.md
+          rm CHANGELOG_OLD.md
+        else
+          # Create new changelog
+          mv CHANGELOG_TEMP.md CHANGELOG.md
+        fi
+        rm -f CHANGELOG_TEMP.md
+    
+    - name: Commit changelog
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add CHANGELOG.md
+        git commit -m "docs: update changelog for ${GITHUB_REF#refs/tags/}" || echo "No changes to commit"
+        git push origin HEAD:main || echo "Failed to push changelog"

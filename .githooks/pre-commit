@@ -1,0 +1,51 @@
+#!/bin/sh
+#
+# Pre-commit hook for Bagel Browser
+# Runs tests, formatting, and linting before allowing commits
+#
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if Cargo.toml exists
+if [ ! -f "Cargo.toml" ]; then
+    echo "❌ Cargo.toml not found. Are you in the right directory?"
+    exit 1
+fi
+
+# Run cargo fmt --check
+echo "📝 Checking code formatting..."
+if ! cargo fmt -- --check; then
+    echo "❌ Code formatting issues found. Run 'cargo fmt' to fix them."
+    exit 1
+fi
+
+# Run cargo clippy
+echo "🔧 Running clippy lints..."
+if ! cargo clippy -- -D warnings; then
+    echo "❌ Clippy found issues. Please fix them before committing."
+    exit 1
+fi
+
+# Run tests
+echo "🧪 Running tests..."
+if ! cargo test; then
+    echo "❌ Tests failed. Please fix them before committing."
+    exit 1
+fi
+
+# Check for common security issues
+echo "🔒 Checking for potential security issues..."
+if grep -r "TODO\|FIXME\|XXX\|HACK" --include="*.rs" src/; then
+    echo "⚠️  Warning: Found TODO/FIXME/XXX/HACK comments. Consider addressing them."
+fi
+
+# Check for hardcoded secrets (basic check)
+if grep -r -E "(password|secret|key|token)\s*=\s*[\"'][^\"']{8,}" --include="*.rs" src/ 2>/dev/null; then
+    echo "❌ Potential hardcoded secrets found. Please remove them."
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
+exit 0
